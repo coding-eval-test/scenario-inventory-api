@@ -57,7 +57,9 @@ public class ExceptionHandlingMiddleware
 
         context.Response.Clear();
         context.Response.StatusCode = status;
-        context.Response.ContentType = MediaTypeNames.Application.ProblemJson;
-        await context.Response.WriteAsJsonAsync(problem);
+
+        // WriteAsJsonAsync resets the content type unless it is passed explicitly.
+        await context.Response.WriteAsJsonAsync(
+            problem, options: null, contentType: MediaTypeNames.Application.ProblemJson);
     }
 }

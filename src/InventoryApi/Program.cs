@@ -1,5 +1,6 @@
 using InventoryApi.Data;
 using InventoryApi.Middleware;
+using InventoryApi.Services;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -9,6 +10,7 @@ builder.Services.AddDbContext<AppDbContext>(options =>
                       ?? "Data Source=inventory.db"));
 
 // --- application services (registered as features are added) ---
+builder.Services.AddScoped<IProductService, ProductService>();
 // --- end application services ---
 
 builder.Services.AddControllers();
