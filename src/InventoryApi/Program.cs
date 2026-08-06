@@ -11,6 +11,8 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 
 // --- application services (registered as features are added) ---
 builder.Services.AddScoped<IProductService, ProductService>();
+builder.Services.AddSingleton(TimeProvider.System);
+builder.Services.AddScoped<IOrderService, OrderService>();
 // --- end application services ---
 
 builder.Services.AddControllers();
