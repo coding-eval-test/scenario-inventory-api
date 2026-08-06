@@ -1,0 +1,28 @@
+{
+  "name": "Order & Inventory API",
+  "image": "mcr.microsoft.com/devcontainers/dotnet:1-10.0-noble",
+  "features": {
+    "ghcr.io/devcontainers/features/github-cli:1": {}
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-dotnettools.csdevkit",
+        "ms-dotnettools.csharp",
+        "qwtel.sqlite-viewer"
+      ],
+      "settings": {
+        "dotnet.defaultSolution": "InventoryApi.sln"
+      }
+    }
+  },
+  "forwardPorts": [5000],
+  "portsAttributes": {
+    "5000": {
+      "label": "API (Swagger at /swagger)",
+      "onAutoForward": "notify"
+    }
+  },
+  "postCreateCommand": "dotnet restore && dotnet build --nologo",
+  "remoteUser": "vscode"
+}
