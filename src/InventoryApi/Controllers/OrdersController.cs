@@ -31,4 +31,14 @@ public class OrdersController : ControllerBase
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<OrderResponse>> GetById(int id, CancellationToken cancellationToken)
         => Ok(await _orders.GetByIdAsync(id, cancellationToken));
+
+    /// <summary>Ships an order from a single warehouse.</summary>
+    [HttpPost("{id:int}/shipments")]
+    [ProducesResponseType(typeof(OrderResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<ActionResult<OrderResponse>> Ship(
+        int id, [FromBody] ShipOrderRequest request, CancellationToken cancellationToken)
+        => Ok(await _orders.ShipAsync(id, request, cancellationToken));
 }

@@ -68,8 +68,77 @@ public class OrderService : IOrderService
         return Map(order);
     }
 
-    public Task<OrderResponse> ShipAsync(int id, ShipOrderRequest request, CancellationToken cancellationToken)
-        => throw new NotImplementedException("Implemented in the shipping feature.");
+    public async Task<OrderResponse> ShipAsync(
+        int id, ShipOrderRequest request, CancellationToken cancellationToken)
+    {
+        var order = await LoadAsync(id, cancellationToken);
+
+        if (order.Status is OrderStatus.Shipped or OrderStatus.Cancelled)
+        {
+            throw new ConflictException(
+                $"Order {id} is {order.Status} and cannot be shipped.");
+        }
+
+        var warehouseExists = await _db.Warehouses
+            .AnyAsync(w => w.Id == request.WarehouseId, cancellationToken);
+        if (!warehouseExists)
+        {
+            throw new NotFoundException($"Warehouse {request.WarehouseId} was not found.");
+        }
+
+        var productIds = order.Lines.Select(l => l.ProductId).ToList();
+        var levels = await _db.StockLevels
+            .Where(s => s.WarehouseId == request.WarehouseId && productIds.Contains(s.ProductId))
+            .ToDictionaryAsync(s => s.ProductId, cancellationToken);
+
+        foreach (var line in order.Lines)
+        {
+            if (!levels.TryGetValue(line.ProductId, out var level) || level.OnHand < line.Quantity)
+            {
+                throw new ConflictException(
+                    $"Warehouse {request.WarehouseId} holds insufficient stock for product {line.ProductId}.");
+            }
+        }
+
+        var shippedAtUtc = _clock.GetUtcNow().UtcDateTime;
+
+        foreach (var line in order.Lines)
+        {
+            var level = levels[line.ProductId];
+
+            // Any reservation this order still holds is consumed by the shipment.
+            var releasedFromReservation = Math.Min(level.Reserved, line.Quantity);
+            level.Reserved -= releasedFromReservation;
+            level.OnHand -= line.Quantity;
+
+            _db.StockAdjustments.Add(new StockAdjustment
+            {
+                ProductId = line.ProductId,
+                WarehouseId = request.WarehouseId,
+                OnHandDelta = -line.Quantity,
+                ReservedDelta = -releasedFromReservation,
+                Reason = StockAdjustmentReason.Shipment,
+                OrderId = order.Id,
+                OccurredAtUtc = shippedAtUtc
+            });
+        }
+
+        _db.Shipments.Add(new Shipment
+        {
+            OrderId = order.Id,
+            WarehouseId = request.WarehouseId,
+            TrackingNumber = $"TRK-{order.Id:D6}",
+            ShippedAtUtc = shippedAtUtc
+        });
+
+        order.Status = OrderStatus.Shipped;
+        await _db.SaveChangesAsync(cancellationToken);
+
+        _logger.LogInformation("Shipped order {OrderId} from warehouse {WarehouseId}",
+            order.Id, request.WarehouseId);
+
+        return await GetByIdAsync(order.Id, cancellationToken);
+    }
 
     private async Task<Order> LoadAsync(int id, CancellationToken cancellationToken)
     {

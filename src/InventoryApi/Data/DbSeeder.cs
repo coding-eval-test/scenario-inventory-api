@@ -132,13 +132,13 @@ public static class DbSeeder
             {
                 Id = orderId,
                 CustomerId = FirstCustomerId + index % CustomerCount,
-                Status = (OrderStatus)(index % 4 switch
+                Status = (index % 4) switch
                 {
-                    0 => (int)OrderStatus.Shipped,
-                    1 => (int)OrderStatus.Reserved,
-                    2 => (int)OrderStatus.Pending,
-                    _ => (int)OrderStatus.Cancelled
-                }),
+                    0 => OrderStatus.Shipped,
+                    1 => OrderStatus.Reserved,
+                    2 => OrderStatus.Pending,
+                    _ => OrderStatus.Cancelled
+                },
                 PlacedAtUtc = SeedBaseUtc.AddDays(-(OrderCount - index)),
                 CancelledAtUtc = index % 4 == 3
                     ? SeedBaseUtc.AddDays(-(OrderCount - index) + 1)

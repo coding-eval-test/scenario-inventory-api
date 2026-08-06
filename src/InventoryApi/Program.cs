@@ -13,6 +13,8 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 builder.Services.AddScoped<IProductService, ProductService>();
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddScoped<IOrderService, OrderService>();
+builder.Services.AddScoped<IInventoryService, InventoryService>();
+builder.Services.AddScoped<IReportService, ReportService>();
 // --- end application services ---
 
 builder.Services.AddControllers();
