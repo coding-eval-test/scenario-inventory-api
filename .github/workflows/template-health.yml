@@ -1,0 +1,54 @@
+name: Template health
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify-shipping-state:
+    name: Verify the template ships in the intended state
+    # Template copies inherit this workflow. Only run it in the source repository.
+    if: github.repository == 'coding-eval-test/scenario-inventory-api'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Build must succeed
+        run: dotnet build --configuration Release
+
+      - name: Regression suite must be green
+        run: dotnet test --no-build --configuration Release --filter Category=Regression
+
+      - name: Every work item must ship red
+        shell: bash
+        run: |
+          failed_as_expected=0
+          for category in S1 S2 S3 B1 B2; do
+            if dotnet test --no-build --configuration Release --filter "Category=${category}" > /dev/null 2>&1; then
+              echo "::error::Category ${category} PASSES in the template. It must ship failing."
+              failed_as_expected=1
+            else
+              echo "Category ${category} fails as intended."
+            fi
+          done
+          exit $failed_as_expected
+
+      - name: Docs must not leak the solution
+        shell: bash
+        run: |
+          if grep -rniE "ProductService|OrderTotalsCalculator|OrderService|EF\.Functions|\.Skip\(" docs/ README.md; then
+            echo "::error::Implementation detail leaked into trainee-facing docs."
+            exit 1
+          fi
+          echo "No solution leakage detected."
