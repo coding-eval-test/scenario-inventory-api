@@ -31,21 +31,17 @@ jobs:
 
       # A work item scores its points only when the whole category passes.
       # The job always exits 0: a partial score is work in progress, not a broken build.
+      #
+      # Work items, their points, and their labels all come from scenario.json —
+      # editing that one file is how a scenario changes what it grades.
+      #
+      # Exit code alone is not enough. `dotnet test --filter Category=X` exits 0 when
+      # NOTHING matches X, so a mistyped or missing category would otherwise be paid in
+      # full. The test count from the .trx is what tells "all passed" from "none ran".
       - name: Score every work item
         id: score
         shell: bash
         run: |
-          categories=(S1 S2 S3 B1 B2 Regression)
-          points=(20 15 15 15 15 20)
-          labels=(
-            "S1 reserve stock on placement"
-            "S2 cancel an order"
-            "S3 low-stock report"
-            "B1 order totals"
-            "B2 product search"
-            "Existing behaviour (regression)"
-          )
-
           total=0
           max=0
           json_items=""
@@ -57,14 +53,35 @@ jobs:
             echo "| --- | --- | --- |"
           } >> "$GITHUB_STEP_SUMMARY"
 
-          for i in "${!categories[@]}"; do
-            category="${categories[$i]}"
-            worth="${points[$i]}"
-            label="${labels[$i]}"
+          while IFS=$'\t' read -r category worth label; do
             max=$((max + worth))
 
+            # stdin is redirected: without it dotnet test would eat the rest of
+            # the manifest off this loop's stdin and only the first item would score.
             echo "::group::${category} — ${label}"
-            if dotnet test --no-build --configuration Release --filter "Category=${category}"; then
+            if dotnet test --no-build --configuration Release \
+                 --filter "Category=${category}" \
+                 --logger "trx;LogFileName=${category}.trx" \
+                 --results-directory TestResults < /dev/null; then
+              suite_passed=1
+            else
+              suite_passed=0
+            fi
+            echo "::endgroup::"
+
+            found=0
+            if [ -f "TestResults/${category}.trx" ]; then
+              found=$(sed -n 's/.*<Counters[^>]*total="\([0-9]*\)".*/\1/p' \
+                        "TestResults/${category}.trx" | head -1)
+              found=${found:-0}
+            fi
+
+            if [ "$found" -eq 0 ]; then
+              earned=0
+              result="no-tests"
+              icon="NO TESTS"
+              echo "::warning::No tests carry Category=${category}. Scoring 0 — check scenario.json against the test traits."
+            elif [ "$suite_passed" -eq 1 ]; then
               earned="$worth"
               result="pass"
               icon="PASS"
@@ -73,7 +90,6 @@ jobs:
               result="fail"
               icon="FAIL"
             fi
-            echo "::endgroup::"
 
             total=$((total + earned))
             echo "| ${label} | ${icon} | ${earned} / ${worth} |" >> "$GITHUB_STEP_SUMMARY"
@@ -81,8 +97,8 @@ jobs:
             if [ -n "$json_items" ]; then
               json_items="${json_items},"
             fi
-            json_items="${json_items}{\"category\":\"${category}\",\"label\":\"${label}\",\"result\":\"${result}\",\"earned\":${earned},\"possible\":${worth}}"
-          done
+            json_items="${json_items}{\"category\":\"${category}\",\"label\":\"${label}\",\"result\":\"${result}\",\"tests\":${found},\"earned\":${earned},\"possible\":${worth}}"
+          done < <(jq -r '.categories[] | [.category, .points, .label] | @tsv' scenario.json)
 
           {
             echo "| **Total** | | **${total} / ${max}** |"
