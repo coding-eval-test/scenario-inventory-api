@@ -2,10 +2,7 @@
   "name": "Order & Inventory API",
   "image": "mcr.microsoft.com/devcontainers/dotnet:1-10.0-noble",
   "features": {
-    "ghcr.io/devcontainers/features/github-cli:1": {},
-    "ghcr.io/devcontainers/features/sshd:1": {
-      "version": "latest"
-    }
+    "ghcr.io/devcontainers/features/github-cli:1": {}
   },
   "customizations": {
     "vscode": {
