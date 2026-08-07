@@ -54,6 +54,10 @@ the red ones green without turning any green one red is the assignment.
 | B2 Product search | 15 |
 | Existing behaviour (regression) | 20 |
 
-Pushing to your repository runs the same checks and reports your score.
+Every push runs the same per-item checks in GitHub Actions and writes a scorecard
+to the run summary — open the **Grade** workflow run to see which work items
+scored and which did not. A partial score is expected while you are working; the
+run is not "broken" because items are still red.
+
 Regression carries real weight — breaking working code costs more than leaving a
 story unfinished.

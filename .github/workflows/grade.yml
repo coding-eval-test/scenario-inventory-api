@@ -1,0 +1,113 @@
+name: Grade
+
+on:
+  push:
+    branches: ["**"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  grade:
+    name: Score submission
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out the submission
+        uses: actions/checkout@v4
+
+      - name: Set up .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Restore
+        run: dotnet restore
+
+      - name: Build
+        run: dotnet build --no-restore --configuration Release
+
+      # A work item scores its points only when the whole category passes.
+      # The job always exits 0: a partial score is work in progress, not a broken build.
+      - name: Score every work item
+        id: score
+        shell: bash
+        run: |
+          categories=(S1 S2 S3 B1 B2 Regression)
+          points=(20 15 15 15 15 20)
+          labels=(
+            "S1 reserve stock on placement"
+            "S2 cancel an order"
+            "S3 low-stock report"
+            "B1 order totals"
+            "B2 product search"
+            "Existing behaviour (regression)"
+          )
+
+          total=0
+          max=0
+          json_items=""
+
+          {
+            echo "## Scorecard"
+            echo ""
+            echo "| Work item | Result | Points |"
+            echo "| --- | --- | --- |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          for i in "${!categories[@]}"; do
+            category="${categories[$i]}"
+            worth="${points[$i]}"
+            label="${labels[$i]}"
+            max=$((max + worth))
+
+            echo "::group::${category} — ${label}"
+            if dotnet test --no-build --configuration Release --filter "Category=${category}"; then
+              earned="$worth"
+              result="pass"
+              icon="PASS"
+            else
+              earned=0
+              result="fail"
+              icon="FAIL"
+            fi
+            echo "::endgroup::"
+
+            total=$((total + earned))
+            echo "| ${label} | ${icon} | ${earned} / ${worth} |" >> "$GITHUB_STEP_SUMMARY"
+
+            if [ -n "$json_items" ]; then
+              json_items="${json_items},"
+            fi
+            json_items="${json_items}{\"category\":\"${category}\",\"label\":\"${label}\",\"result\":\"${result}\",\"earned\":${earned},\"possible\":${worth}}"
+          done
+
+          {
+            echo "| **Total** | | **${total} / ${max}** |"
+            echo ""
+            echo "Run \`./scripts/check.sh\` (or \`./scripts/check.ps1\`) locally for the same per-item split."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          cat > score.json <<JSON
+          {
+            "repository": "${GITHUB_REPOSITORY}",
+            "sha": "${GITHUB_SHA}",
+            "runId": "${GITHUB_RUN_ID}",
+            "total": ${total},
+            "possible": ${max},
+            "items": [${json_items}]
+          }
+          JSON
+
+          echo "total=${total}" >> "$GITHUB_OUTPUT"
+          echo "possible=${max}" >> "$GITHUB_OUTPUT"
+          echo "Scored ${total}/${max}."
+
+      - name: Upload score.json
+        uses: actions/upload-artifact@v4
+        with:
+          name: score
+          path: score.json
+          if-no-files-found: error
