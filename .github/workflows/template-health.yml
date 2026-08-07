@@ -20,6 +20,47 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # scenario.json is the single source of truth for the work items and their
+      # points. check.sh parses it with sed, which is only safe while the file
+      # stays in jq's canonical one-key-per-line shape — so assert that first.
+      - name: scenario.json must be canonically formatted
+        shell: bash
+        run: |
+          if ! diff <(jq --indent 2 . scenario.json) scenario.json; then
+            echo "::error::scenario.json is not canonically formatted. Run: jq --indent 2 . scenario.json | sponge scenario.json"
+            exit 1
+          fi
+          echo "scenario.json is canonical."
+
+      - name: scenario.json must name this repository
+        shell: bash
+        run: |
+          declared=$(jq -r '.templateRepo' scenario.json)
+          if [ "$declared" != "${GITHUB_REPOSITORY}" ]; then
+            echo "::error::scenario.json templateRepo is '${declared}' but this repo is '${GITHUB_REPOSITORY}'."
+            echo "::error::The job guard above is keyed off the same slug — fix both together."
+            exit 1
+          fi
+          echo "templateRepo matches ${GITHUB_REPOSITORY}."
+
+      - name: README grading table must match scenario.json
+        shell: bash
+        run: |
+          {
+            echo "| Work item | Points |"
+            echo "| --- | --- |"
+            jq -r '.categories[] | "| \(.label) | \(.points) |"' scenario.json
+          } > /tmp/expected-table.md
+
+          sed -n '/<!-- grading-table:start -->/,/<!-- grading-table:end -->/p' README.md \
+            | sed '1d;$d' > /tmp/actual-table.md
+
+          if ! diff /tmp/expected-table.md /tmp/actual-table.md; then
+            echo "::error::The README grading table does not match scenario.json. Left is expected."
+            exit 1
+          fi
+          echo "README grading table matches scenario.json."
+
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: "10.0.x"

@@ -45,14 +45,16 @@ the red ones green without turning any green one red is the assignment.
 
 ## Grading
 
+<!-- grading-table:start -->
 | Work item | Points |
 | --- | --- |
-| S1 Reserve stock on placement | 20 |
-| S2 Cancel an order | 15 |
-| S3 Low-stock report | 15 |
-| B1 Order totals | 15 |
-| B2 Product search | 15 |
+| S1 reserve stock on placement | 20 |
+| S2 cancel an order | 15 |
+| S3 low-stock report | 15 |
+| B1 order totals | 15 |
+| B2 product search | 15 |
 | Existing behaviour (regression) | 20 |
+<!-- grading-table:end -->
 
 Every push runs the same per-item checks in GitHub Actions and writes a scorecard
 to the run summary — open the **Grade** workflow run to see which work items

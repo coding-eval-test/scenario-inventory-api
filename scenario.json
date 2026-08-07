@@ -1,0 +1,39 @@
+{
+  "scenario": "inventory-api",
+  "name": "Order & Inventory API",
+  "templateRepo": "coding-eval-test/scenario-inventory-api",
+  "projectPath": "src/InventoryApi",
+  "docsAllowList": [],
+  "categories": [
+    {
+      "category": "S1",
+      "points": 20,
+      "label": "S1 reserve stock on placement"
+    },
+    {
+      "category": "S2",
+      "points": 15,
+      "label": "S2 cancel an order"
+    },
+    {
+      "category": "S3",
+      "points": 15,
+      "label": "S3 low-stock report"
+    },
+    {
+      "category": "B1",
+      "points": 15,
+      "label": "B1 order totals"
+    },
+    {
+      "category": "B2",
+      "points": 15,
+      "label": "B2 product search"
+    },
+    {
+      "category": "Regression",
+      "points": 20,
+      "label": "Existing behaviour (regression)"
+    }
+  ]
+}
