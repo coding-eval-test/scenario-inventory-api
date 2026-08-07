@@ -3,7 +3,10 @@
   "name": "Order & Inventory API",
   "templateRepo": "coding-eval-test/scenario-inventory-api",
   "projectPath": "src/InventoryApi",
-  "docsAllowList": [],
+  "docsAllowList": [
+    "NotFoundException",
+    "ConflictException"
+  ],
   "categories": [
     {
       "category": "S1",

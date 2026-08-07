@@ -68,28 +68,72 @@ jobs:
       - name: Build must succeed
         run: dotnet build --configuration Release
 
+      # Regression is the one category with inverted semantics — it must pass —
+      # so it stays named explicitly rather than coming from the manifest loop.
       - name: Regression suite must be green
         run: dotnet test --no-build --configuration Release --filter Category=Regression
 
-      - name: Every work item must ship red
+      - name: Every work item must ship red, and must have tests
         shell: bash
         run: |
-          failed_as_expected=0
-          for category in S1 S2 S3 B1 B2; do
-            if dotnet test --no-build --configuration Release --filter "Category=${category}" > /dev/null 2>&1; then
-              echo "::error::Category ${category} PASSES in the template. It must ship failing."
-              failed_as_expected=1
-            else
-              echo "Category ${category} fails as intended."
-            fi
-          done
-          exit $failed_as_expected
+          problems=0
+          while read -r category; do
+            passed=0
+            dotnet test --no-build --configuration Release \
+              --filter "Category=${category}" \
+              --logger "trx;LogFileName=${category}.trx" \
+              --results-directory TestResults < /dev/null > /dev/null 2>&1 && passed=1
 
+            found=0
+            if [ -f "TestResults/${category}.trx" ]; then
+              found=$(sed -n 's/.*<Counters[^>]*total="\([0-9]*\)".*/\1/p' \
+                        "TestResults/${category}.trx" | head -1)
+              found=${found:-0}
+            fi
+
+            # An empty category is a scenario bug: the grader would report NO TESTS
+            # and the work item would be unscoreable. Fail loudly here, in the one
+            # repo where it can still be fixed before trainees copy it.
+            if [ "$found" -eq 0 ]; then
+              echo "::error::No tests carry Category=${category}. scenario.json and the test traits disagree."
+              problems=1
+            elif [ "$passed" -eq 1 ]; then
+              echo "::error::Category ${category} PASSES in the template. It must ship failing."
+              problems=1
+            else
+              echo "Category ${category} fails as intended (${found} tests)."
+            fi
+          done < <(jq -r '.categories[] | select(.category != "Regression") | .category' scenario.json)
+          exit $problems
+
+      # Derived from the code rather than hardcoded, so a new scenario inherits the
+      # check for free. The domain-specific half of this — the APIs a fix actually
+      # uses — lives in the private solution repo, because naming them here would
+      # leak them: this file is public and trainees clone it.
       - name: Docs must not leak the solution
         shell: bash
         run: |
-          if grep -rniE "ProductService|OrderTotalsCalculator|OrderService|EF\.Functions|\.Skip\(" docs/ README.md; then
+          mapfile -t allow < <(jq -r '.docsAllowList // [] | .[]' scenario.json)
+
+          names=$(grep -rhoE '\b(class|interface|record|struct|enum) [A-Za-z0-9_]+' \
+                    --include='*.cs' src/*/Services/ \
+                    | awk '{print $2}' | sort -u)
+
+          for entry in "${allow[@]}"; do
+            names=$(printf '%s\n' "$names" | grep -vxF "$entry" || true)
+          done
+
+          if [ -z "$names" ]; then
+            echo "::error::No service type names found under src/*/Services — the leak check is not actually checking anything."
+            exit 1
+          fi
+
+          pattern=$(printf '%s\n' "$names" | paste -sd '|' -)
+          echo "Checking trainee-facing docs against: ${pattern}"
+
+          if grep -rnwE "$pattern" docs/ README.md; then
             echo "::error::Implementation detail leaked into trainee-facing docs."
+            echo "::error::If a name legitimately belongs in prose, add it to docsAllowList in scenario.json."
             exit 1
           fi
           echo "No solution leakage detected."
