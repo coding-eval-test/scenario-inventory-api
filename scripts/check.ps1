@@ -1,6 +1,24 @@
 # Runs the same per-category checks the grader runs.
 $ErrorActionPreference = 'Continue'
 
+$root = Split-Path -Parent $PSScriptRoot
+Push-Location $root
+try {
+$manifest = Join-Path $root 'scenario.json'
+
+if (-not (Test-Path $manifest)) {
+    Write-Host "scenario.json not found at $manifest - cannot tell which work items to check."
+    exit 1
+}
+
+# scenario.json is the same file the grader reads.
+$categories = (Get-Content $manifest -Raw | ConvertFrom-Json).categories.category
+
+if (-not $categories) {
+    Write-Host "No work items found in $manifest. Expected 'category' entries - is the file valid JSON?"
+    exit 1
+}
+
 Write-Host 'Building...'
 dotnet build --nologo --verbosity quiet
 if ($LASTEXITCODE -ne 0) {
@@ -8,15 +26,31 @@ if ($LASTEXITCODE -ne 0) {
     exit 1
 }
 
-$categories = @('Regression', 'S1', 'S2', 'S3', 'B1', 'B2')
 $results = [ordered]@{}
 $overall = 0
 
 foreach ($category in $categories) {
     Write-Host ''
     Write-Host "=== $category ==="
-    dotnet test --no-build --nologo --verbosity quiet --filter "Category=$category"
-    if ($LASTEXITCODE -eq 0) {
+    $trx = Join-Path $root "TestResults/$category.trx"
+    dotnet test --no-build --nologo --verbosity quiet `
+        --filter "Category=$category" `
+        --logger "trx;LogFileName=$category.trx" `
+        --results-directory (Join-Path $root 'TestResults')
+    $suitePassed = ($LASTEXITCODE -eq 0)
+
+    # An empty filter exits 0, so the exit code alone would report a phantom PASS.
+    $found = 0
+    if (Test-Path $trx) {
+        $match = Select-String -Path $trx -Pattern '<Counters[^>]*total="(\d+)"' | Select-Object -First 1
+        if ($match) { $found = [int]$match.Matches[0].Groups[1].Value }
+    }
+
+    if ($found -eq 0) {
+        $results[$category] = 'NO TESTS'
+        $overall = 1
+    }
+    elseif ($suitePassed) {
         $results[$category] = 'PASS'
     }
     else {
@@ -33,3 +67,7 @@ foreach ($category in $categories) {
 Write-Host '========================================'
 
 exit $overall
+}
+finally {
+    Pop-Location
+}
