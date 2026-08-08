@@ -137,3 +137,21 @@ jobs:
             exit 1
           fi
           echo "No solution leakage detected."
+
+  devcontainer-build:
+    name: Devcontainer must build
+    # Template copies inherit this workflow. Only run it in the source repository.
+    if: github.repository == 'coding-eval-test/scenario-inventory-api'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # A broken devcontainer (e.g. the sshd-feature/apt NO_PUBKEY incident) fails
+      # silently in Codespaces, which falls back to a recovery container instead of
+      # surfacing the error. Build it here so a bad devcontainer.json fails the push.
+      - name: Devcontainer must build
+        uses: devcontainers/ci@v0.3
+        with:
+          push: never
