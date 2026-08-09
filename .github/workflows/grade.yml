@@ -36,8 +36,11 @@ jobs:
       # editing that one file is how a scenario changes what it grades.
       #
       # Exit code alone is not enough. `dotnet test --filter Category=X` exits 0 when
-      # NOTHING matches X, so a mistyped or missing category would otherwise be paid in
-      # full. The test count from the .trx is what tells "all passed" from "none ran".
+      # NOTHING matches X, and a fully skipped suite ([Fact(Skip=...)]) also exits 0 —
+      # the executed count from the .trx is what tells "all passed" from "none ran".
+      # A partial skip is the same cheat in smaller doses: skip only the failing
+      # tests, keep the shipped-passing ones, and executed > 0 with a green exit —
+      # so executed is compared against total too, and any skip zeroes the category.
       - name: Score every work item
         id: score
         shell: bash
@@ -70,10 +73,14 @@ jobs:
             echo "::endgroup::"
 
             found=0
+            expected=0
             if [ -f "TestResults/${category}.trx" ]; then
-              found=$(sed -n 's/.*<Counters[^>]*total="\([0-9]*\)".*/\1/p' \
+              found=$(sed -n 's/.*<Counters[^>]* executed="\([0-9]*\)".*/\1/p' \
                         "TestResults/${category}.trx" | head -1)
               found=${found:-0}
+              expected=$(sed -n 's/.*<Counters[^>]* total="\([0-9]*\)".*/\1/p' \
+                           "TestResults/${category}.trx" | head -1)
+              expected=${expected:-0}
             fi
 
             if [ "$found" -eq 0 ]; then
@@ -81,6 +88,11 @@ jobs:
               result="no-tests"
               icon="NO TESTS"
               echo "::warning::No tests carry Category=${category}. Scoring 0 — check scenario.json against the test traits."
+            elif [ "$found" -lt "$expected" ]; then
+              earned=0
+              result="skipped"
+              icon="SKIPPED"
+              echo "::warning::Category ${category} contains skipped tests (${found}/${expected} executed). Skipped tests score zero — remove the Skip attributes."
             elif [ "$suite_passed" -eq 1 ]; then
               earned="$worth"
               result="pass"

@@ -39,15 +39,26 @@ foreach ($category in $categories) {
         --results-directory (Join-Path $root 'TestResults')
     $suitePassed = ($LASTEXITCODE -eq 0)
 
-    # An empty filter exits 0, so the exit code alone would report a phantom PASS.
+    # An empty filter exits 0, and a fully skipped suite ([Fact(Skip=...)]) also
+    # exits 0, so the exit code alone would report a phantom PASS. A partial skip
+    # is the same cheat in smaller doses: skip only the failing tests, keep the
+    # shipped-passing ones, and executed > 0 with a green exit — so executed is
+    # compared against total too, and any skip zeroes the category.
     $found = 0
+    $expected = 0
     if (Test-Path $trx) {
-        $match = Select-String -Path $trx -Pattern '<Counters[^>]*total="(\d+)"' | Select-Object -First 1
+        $match = Select-String -Path $trx -Pattern '<Counters[^>]* executed="(\d+)"' | Select-Object -First 1
         if ($match) { $found = [int]$match.Matches[0].Groups[1].Value }
+        $totalMatch = Select-String -Path $trx -Pattern '<Counters[^>]* total="(\d+)"' | Select-Object -First 1
+        if ($totalMatch) { $expected = [int]$totalMatch.Matches[0].Groups[1].Value }
     }
 
     if ($found -eq 0) {
         $results[$category] = 'NO TESTS'
+        $overall = 1
+    }
+    elseif ($found -lt $expected) {
+        $results[$category] = 'SKIPPED'
         $overall = 1
     }
     elseif ($suitePassed) {

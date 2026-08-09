@@ -42,16 +42,27 @@ for category in $categories; do
     suite_passed=0
   fi
 
-  # An empty filter exits 0, so the exit code alone would report a phantom PASS.
+  # An empty filter exits 0, and a fully skipped suite ([Fact(Skip=...)]) also
+  # exits 0, so the exit code alone would report a phantom PASS. A partial skip
+  # is the same cheat in smaller doses: skip only the failing tests, keep the
+  # shipped-passing ones, and executed > 0 with a green exit — so executed is
+  # compared against total too, and any skip zeroes the category.
   found=0
+  expected=0
   if [ -f "$root/TestResults/${category}.trx" ]; then
-    found=$(sed -n 's/.*<Counters[^>]*total="\([0-9]*\)".*/\1/p' \
+    found=$(sed -n 's/.*<Counters[^>]* executed="\([0-9]*\)".*/\1/p' \
               "$root/TestResults/${category}.trx" | head -1)
     found=${found:-0}
+    expected=$(sed -n 's/.*<Counters[^>]* total="\([0-9]*\)".*/\1/p' \
+                 "$root/TestResults/${category}.trx" | head -1)
+    expected=${expected:-0}
   fi
 
   if [ "$found" -eq 0 ]; then
     results[$category]="NO TESTS"
+    overall=1
+  elif [ "$found" -lt "$expected" ]; then
+    results[$category]="SKIPPED"
     overall=1
   elif [ "$suite_passed" -eq 1 ]; then
     results[$category]="PASS"
